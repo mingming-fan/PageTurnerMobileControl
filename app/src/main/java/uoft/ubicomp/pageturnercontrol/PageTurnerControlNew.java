@@ -5,57 +5,43 @@ package uoft.ubicomp.pageturnercontrol;
  */
 import android.app.Activity;
 import android.content.Context;
-import android.graphics.Bitmap;
-import android.graphics.Canvas;
 import android.graphics.Color;
-import android.graphics.Paint;
 import android.os.AsyncTask;
 import android.os.Bundle;
 import android.os.Vibrator;
 import android.support.annotation.Nullable;
-import android.support.v4.view.GestureDetectorCompat;
-import android.util.Log;
 import android.view.Display;
-import android.view.GestureDetector;
 import android.view.MotionEvent;
 import android.view.View;
-import android.widget.ImageView;
-import android.widget.TextView;
 
 public class PageTurnerControlNew extends Activity implements View.OnTouchListener {
     private final String TAG = PageTurnerControlNew.this.getClass().getSimpleName();
-    //ImageView imageView_Screen;
-    DrawView mDrawView;
 
-    private int mWidth = 1440;
-    private enum Direction {left, right, no}
-    Direction mCurrent = Direction.no;
+    DrawView mDrawView;
     String message2send = "";
     TCPClient mClient = null;
     String IP = "";
     float cancelThreshold = 20;
     float leftrightThreshold = 10;
-    boolean initialTouch = true;
     float initialTouchX = 0;
     float initialTouchY = 0;
+    float previousTouchX = 0;
+    float previousTouchY = 0;
     Vibrator mVibrator;
     float dw = 0;
     float dh = 0;
+    final float threshold = 10;
+
     @Override
     protected void onCreate(@Nullable Bundle savedInstanceState) {
         super.onCreate(savedInstanceState);
-
         Bundle b = getIntent().getExtras();
         IP = b.getString("IP");
-
         setContentView(R.layout.activity_controller_new);
-        //imageView_Screen = (ImageView)findViewById(R.id.imageView_left);
-        //imageView_Screen.setOnTouchListener(this);
-
         new TCPConnectionTask().execute("");
 
         mDrawView = new DrawView(this);
-        mDrawView.setBackgroundColor(Color.WHITE);
+        mDrawView.setBackgroundColor(Color.BLACK);
         mDrawView.setOnTouchListener(this);
         setContentView(mDrawView);
 
@@ -65,9 +51,7 @@ public class PageTurnerControlNew extends Activity implements View.OnTouchListen
 
         cancelThreshold = dh * 0.15f;
         leftrightThreshold = dw * 0.15f;
-
         mVibrator = (Vibrator) getSystemService(Context.VIBRATOR_SERVICE);
-
     }
 
     @Override
@@ -95,11 +79,6 @@ public class PageTurnerControlNew extends Activity implements View.OnTouchListen
 
         switch(motionEvent.getAction()){
             case MotionEvent.ACTION_DOWN:
-//                if(initialTouch){
-//                    initialTouchX = motionEvent.getX();
-//                    initialTouchY = motionEvent.getY();
-//                    initialTouch = false;
-//                }
                 initialTouchX = motionEvent.getX();
                 initialTouchY = motionEvent.getY();
                 mDrawView.setParams(currentX, currentY, cancelThreshold, leftrightThreshold, dw);
@@ -110,13 +89,27 @@ public class PageTurnerControlNew extends Activity implements View.OnTouchListen
                 break;
             case MotionEvent.ACTION_MOVE:
 //                Log.i(TAG, "coordinate: x: " + motionEvent.getX() + " , y: " + motionEvent.getY());
-
                 if(currentY <= initialTouchY - cancelThreshold || currentY >= initialTouchY + cancelThreshold){
-                    //cancel
-                    message2send = "cancel\\n";
                    //vibrate
-                    if (mVibrator.hasVibrator()) {
-                        mVibrator.vibrate(300);
+                    if ((Math.abs(previousTouchX - currentX) > threshold ||  Math.abs(previousTouchY - currentY) > threshold ) && mVibrator.hasVibrator()) {
+                        customVibratePattern("updown");
+                    }
+                }
+                else{
+                    if(currentX > initialTouchX + leftrightThreshold){
+                        //vibrate
+                        if ((Math.abs(previousTouchX - currentX) > threshold ||  Math.abs(previousTouchY - currentY) > threshold ) && mVibrator.hasVibrator()) {
+                            customVibratePattern("leftright");
+                        }
+                    }
+                    else if (currentX < initialTouchX - leftrightThreshold){
+                        //vibrate
+                        if ((Math.abs(previousTouchX - currentX) > threshold ||  Math.abs(previousTouchY - currentY) > threshold ) && mVibrator.hasVibrator()) {
+                            customVibratePattern("leftright");
+                        }
+                    }
+                    else{
+                            mVibrator.cancel();
                     }
                 }
                 break;
@@ -124,7 +117,6 @@ public class PageTurnerControlNew extends Activity implements View.OnTouchListen
                 if(currentY <= initialTouchY - cancelThreshold || currentY >= initialTouchY + cancelThreshold){
                     //cancel
                     message2send = "cancel\\n";
-                    mClient.sendMessage(message2send);
                 }
                 else{
                     if(currentX > initialTouchX + leftrightThreshold){
@@ -137,7 +129,7 @@ public class PageTurnerControlNew extends Activity implements View.OnTouchListen
                         message2send = "up\\n";
                     }
                 }
-//                initialTouch = true;
+                mVibrator.cancel();
                 mClient.sendMessage(message2send);
                 //reset everything
                 message2send = "";
@@ -147,7 +139,28 @@ public class PageTurnerControlNew extends Activity implements View.OnTouchListen
             default:
                 break;
         }
+        previousTouchX = currentX;
+        previousTouchY = currentY;
+
         return true;
+    }
+
+    private void customVibratePattern(String direction) {
+        // 0 : Start without a delay
+        // 200 : Vibrate for 400 milliseconds
+        // 200 : Pause for 200 milliseconds
+        // 200 : Vibrate for 400 milliseconds
+        long[] mVibratePattern = new long[]{0, 100, 100, 100, 100};
+        long[] mVibratePattern2 = new long[]{0,500, 5, 500, 5};
+
+        // -1 : Do not repeat this pattern
+        // pass 0 if you want to repeat this pattern from 0th index
+        if(direction.equals("updown")){
+            mVibrator.vibrate(mVibratePattern2, 0);
+        }
+        else{
+            mVibrator.vibrate(mVibratePattern, 0);
+        }
     }
 
 
